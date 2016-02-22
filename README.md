@@ -1,4 +1,6 @@
 ## bos-couchdb
+[![Build Status](https://travis-ci.org/BlueOakJS/bos-couchdb.svg?branch=master)](https://travis-ci.org/BlueOakJS/bos-couchdb)
+[![npm version](https://img.shields.io/npm/v/bos-couchdb.svg)](https://www.npmjs.com/package/bos-couchdb)
 
 This is a [CouchDB](https://couchdb.apache.org/) service for BlueOak Server.
 The service provides a convenient way of accessing couchdb servers through BlueOak Server.
