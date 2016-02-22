@@ -44,6 +44,18 @@ The configuration below defines two databases: _profiles_ belonging to the cloud
 }
 ```
 
+#### Scoped Config Options
+
+Scoped config are options that can be set on the root couchdb object, the connection, or the database.
+The database-specific value has precedence over the connection-specific value.
+The connection-specific value has precedence over the root value.
+
+This allows the definition of global values that can be overridden as desired.
+
+Valid options are:
+* validateConnection (default true) - verify the ability to connect to the database when the server starts.
+* createDatabase (default false) - attempt to create the database if it doesn't exist when the server starts.
+
 ### Usage
 
 The bo-couchdb service can be injected into services or handlers through a `boCouchdb` parameter on the init method.

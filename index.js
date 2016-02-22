@@ -8,6 +8,7 @@ var URL = require('url');
 var VError = require('verror');
 var _ = require('lodash');
 var debug = require('debug')('couchdb');
+var scope = require('./lib/scope');
 
 var connections = {}; //map connection name to the db object
 var dbMap = {}; //map with key "<connName>:<dbName>" and value is the db object
@@ -18,11 +19,13 @@ var dbByName = {}; //used to look up a database without a connection name.  Look
 // }
 
 var cfg, logger;
+var scopedConfig;
 
 exports.init = function (config, _logger_, callback) {
 
     logger = _logger_;
     cfg = config.get('couchdb');
+    scopedConfig = scope(cfg);
 
     var conns = _.keys(cfg.connections);
     debug('Initializing connections ' +  conns);
@@ -90,21 +93,49 @@ function getVerifyDatabase(connName) {
     return function (dbName, callback) {
         debug('Verifying database ' + dbName + ' of connection ' + connName);
         var conn = connections[connName];
+
+        function setupConnection() {
+            //store the db object in appropriate places
+            var db = conn.use(dbName);
+            dbMap[connName + ':' + dbName] = db;
+            if (typeof dbByName[dbName] === 'undefined') {
+                dbByName[dbName] = {};
+            } else {
+                logger.warn('Multiple databases are using the name "%s"', dbName);
+            }
+
+            dbByName[dbName][connName] = db;
+        }
+
+        var validateConnection = scopedConfig.get('validateConnection', connName, dbName, true);
+
+        //if false, don't bother trying to connect to the db
+        if (!validateConnection) {
+            setupConnection();
+            return callback();
+        }
+
+        //we want to validate the connection, so attempt to connect to it
         conn.db.get(dbName, function (err, body) {
             if (err) {
-                return callback(new VError(err, 'Could not connect to DB %s of connection %s', dbName, connName));
-            } else {
-
-                //store the db object in appropriate places
-                var db = conn.use(dbName);
-                dbMap[connName + ':' + dbName] = db;
-                if (typeof dbByName[dbName] === 'undefined') {
-                    dbByName[dbName] = {};
+                //If the DB doesn't exist, we can attempt to create it assuming createOnConnect is specified
+                var createOnInit = scopedConfig.get('createDatabase', connName, dbName, false);
+                if (createOnInit) {
+                    conn.db.create(dbName, function (err, body) {
+                        if (err) {
+                            return callback(new VError(err, 'Could not create DB %s of connection %s', dbName, connName));
+                        } else {
+                            logger.info('Created database %s of connection %s.', dbName, connName);
+                            setupConnection();
+                            return callback();
+                        }
+                    });
                 } else {
-                    logger.warn('Multiple databases are using the name "%s"', dbName);
+                    return callback(new VError(err, 'Could not connect to DB %s of connection %s', dbName, connName));
                 }
 
-                dbByName[dbName][connName] = db;
+            } else {
+                setupConnection();
                 return callback();
             }
         });
