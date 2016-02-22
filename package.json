@@ -12,6 +12,15 @@
     "lint": "eslint index.js test && echo lint complete."
   },
   "author": "Patrick Wolf <patrick.wolf@pointsource.com>",
+  "keywords": [
+    "node",
+    "couchdb",
+    "blueoak",
+    "blueoak-server",
+    "nano",
+    "cloudant",
+    "service"
+  ],
   "license": "MIT",
   "dependencies": {
     "async": "^1.5.2",
