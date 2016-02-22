@@ -53,8 +53,8 @@ The connection-specific value has precedence over the root value.
 This allows the definition of global values that can be overridden as desired.
 
 Valid options are:
-* validateConnection (default true) - verify the ability to connect to the database when the server starts.
-* createDatabase (default false) - attempt to create the database if it doesn't exist when the server starts.
+* *validateConnection* (default true) - verify the ability to connect to the database when the server starts.
+* *createDatabase* (default false) - attempt to create the database if it doesn't exist when the server starts.
 
 ### Usage
 
