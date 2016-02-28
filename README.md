@@ -60,10 +60,10 @@ Valid options are:
 
 ### Usage
 
-The bo-couchdb service can be injected into services or handlers through a `boCouchdb` parameter on the init method.
+The bos-couchdb service can be injected into services or handlers through a `bosCouchdb` parameter on the init method.
 
 ```js
-exports.init = function(config, logger, boCouchdb) {
+exports.init = function(config, logger, bosCouchdb) {
   ...
 }
 ```
@@ -73,7 +73,7 @@ The `getConnection` function will return a named connection where _connectionNam
 The nano [database](https://github.com/dscape/nano#database-functions) functions can be used on the connection object.
 
 ```js
-var conn = boCouchdb.getConnection('local');
+var conn = bosCouchdb.getConnection('local');
 conn.list(function(err, results) {
   //results is a list of databases on the connection
 });
@@ -84,7 +84,7 @@ The `get` function will return a database where dbName corresponds to a database
 The nano [document](https://github.com/dscape/nano#document-functions) functions can be used on the db object.
 
 ```js
-var profilesDb = boCouchdb.get('profiles');
+var profilesDb = bosCouchdb.get('profiles');
 profilesDb.get('foo' /*doc id*/, function(err, body) {
   if (!err)
     console.log(body);
@@ -95,8 +95,8 @@ Since it's possible that more than one connection will share a database name, th
 This will avoid any possible ambiguity in looking up a database.
 
 ```js
-var profilesDb = boCouchdb.get('cloudant:profiles');
-var devicesDb = boCouchdb.get('local:devices');
+var profilesDb = bosCouchdb.get('cloudant:profiles');
+var devicesDb = bosCouchdb.get('local:devices');
 ```
 
 
