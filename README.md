@@ -58,8 +58,73 @@ The connection-specific value has precedence over the root value.
 This allows the definition of global values that can be overridden as desired.
 
 Valid options are:
-* *validateConnection* (default true) - verify the ability to connect to the database when the server starts.
-* *createDatabase* (default false) - attempt to create the database if it doesn't exist when the server starts.
+
+* *validateConnection* (default `true`) - verify the ability to connect to the database when the server starts.
+* *createDatabase* (default `false`) - attempt to create the database if it doesn't exist when the server starts.
+* *updateDesigns* (default `false`) - attempt to update the (changed) designs when the server starts.
+
+## Managing Views
+
+`bos-couchdb` can be used to update views (design documents) based on the content of the `couchdb` directory in your BOS project.
+This makes it easier to keep these designs local to your project, in source control, as well as simplifying and standardizing their installation/update on the server(s) your BOS server connects to in every environment.
+You can configure `bos-couchdb` to update any changed designs on startup by setting the *updateDesigns* config option, or on any event by calling the `updateDatabases` function.
+
+### `couchdb/`
+
+Designs to be mannaged by `bos-couchdb` should be placed in a tree structure in the `couchdb` directory that defines to what database they apply.
+
+e.g.:
+```
+    couchdb/
+        conn1/
+            dba/
+                designx.js
+                designy.js
+            dbb/
+                designz.js
+        conn2/
+            dbc/
+                designp.js
+            dbd/
+                designq.js
+```
+
+i.e. the design implementation for a given view will be in a BOS project at: `couchdb/$conn_name/$db_name/$design_name.js`
+
+### Sturcture of Design Documents
+
+The design documents to be used to update the views, either on startup with the *updateDesigns* option, or on-demand with the `updateDesigns` function, need to:
+
+1. export an object with a key `views`
+2. that contains an object named for of every view to be managed/updated
+3. which has `toString()`'d functions named `map` and `reduce`
+
+e.g., `couchdb/conn1/dba/designx.js`:
+```js
+module.exports = {
+  views: {
+    'ExampleView': {
+      map: (function (doc) {
+        if (!(doc.event === 'seenAnnouncement' || doc.event === 'seenBlog')) {
+          emit([doc.userId, doc.campaignId], {
+            timestamp: doc.timestamp, 
+            event: doc.event
+          });
+        }
+      }).toString(),
+      reduce: (function (keys, values, rereduce) {
+        // identicial implementation for reduce and rereduce
+        values.sort(function (a, b) {
+          return b.timestamp - a.timestamp;
+        });
+        return (values[0].event === 'resetPreferences') ? null : values[0];
+      }).toString()
+    }
+  }
+};
+```
+
+(Probably other fields from the [CouchDB design doc format](http://guide.couchdb.org/draft/design.html) can be include in the export - if you do so and confirm it works, please submit a pull request to update the docs (and tests - pretty please).)
 
 ## Usage
 
@@ -104,5 +169,14 @@ var profilesDb = boCouchdb.get('cloudant:profiles');
 var devicesDb = boCouchdb.get('local:devices');
 ```
 
+### updateDesigns([designs])
 
+The `updateDesigns` function takes an optional array of paths to design names, e.g.:
+```js
+['conn1.dba.designx', 'conn2.dbd.designq']
+``` 
+which would cause only the designs at `couchdb/conn1/dba/designx.js` and `couchdb/conn2/dbd/designq.js` to be updated (if changed).
 
+By default, if the `designs` parameter is not included, all designs will be updated (if changed).
+
+The `updateDesigns` function will not change the design in the database if the local version `_.isEqual()` to the design installed on the CouchDB server.

@@ -1,6 +1,6 @@
 {
   "name": "bos-couchdb",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "CouchDB service for BlueOak Server",
   "repository": {
     "type": "git",
@@ -9,9 +9,12 @@
   "main": "index.js",
   "scripts": {
     "test": "mocha --check-leaks test/unit; npm run lint",
-    "lint": "eslint index.js test && echo lint complete."
+    "lint": "eslint index.js lib test && echo lint complete."
   },
   "author": "Patrick Wolf <patrick.wolf@pointsource.com>",
+  "contributors": [
+    "Sean Kennedy <sean.kennedy@pointsource.com>"
+  ],
   "keywords": [
     "node",
     "couchdb",
