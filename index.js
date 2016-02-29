@@ -2,9 +2,17 @@
  * Copyright (c) 2016 PointSource, LLC.
  * MIT Licensed
  */
+
+module.exports = {
+    init: init,
+    get: get,
+    getConnection: getConnection,
+    getConnections: getConnections
+};
+
 var async = require('async');
 var nano = require('nano');
-var URL = require('url');
+var url = require('url');
 var VError = require('verror');
 var _ = require('lodash');
 var debug = require('debug')('couchdb');
@@ -21,7 +29,7 @@ var dbByName = {}; //used to look up a database without a connection name.  Look
 var cfg, logger;
 var scopedConfig;
 
-exports.init = function (config, _logger_, callback) {
+function init(config, _logger_, callback) {
 
     logger = _logger_;
     cfg = config.get('couchdb');
@@ -32,24 +40,37 @@ exports.init = function (config, _logger_, callback) {
     async.forEach(conns, initConnection, function (err, res) {
         callback(err);
     });
-};
+}
 
 //return the db connection (nano) object directly
-exports.getConnection = function (connName) {
+/**
+ * Get a connection.
+ * 
+ * @param  {string} connName - The name of the connection to retrieve.
+ * 
+ * @return {Object} The `nano` connection object.
+ */
+function getConnection(connName) {
     return connections[connName];
-};
+}
 
-exports.getConnections = function() {
+/**
+ * Get all the connections.
+ */
+function getConnections() {
     return connections;
-};
+}
 
 /*
- * Get a database connection.
- * The name can either be of the form "<connName>:<dbName>", e.g. "myCloudantDb:users"
- * Or it can simply be the db name, e.g. "users".
- * In the case that there are two connections
+ * Get a database.
+ * 
+ * @param  {string} name - The name can either be of the form "<connName>:<dbName>",
+ *  e.g. "myCloudantDb:users", or it can simply be the db name, e.g. "users".
+ *  In the case that there are two connections
+ * 
+ * @return {Object} The `nano` database object.
  */
-exports.get = function (name) {
+function get(name) {
     debug('Getting database ' + name);
 
     if (name.indexOf(':') > -1) {
@@ -64,22 +85,22 @@ exports.get = function (name) {
 
         return conns[keys[0]];
     }
-};
+}
 
 function initConnection(connName, callback) {
 
     var connCfg = cfg.connections[connName];
-    var url = connCfg.url;
+    var connUrl = connCfg.url;
 
     //embed the username and password into the URL, e.g. http://<username>:<password>@...
     if (connCfg.username && connCfg.password) {
-        var urlData = URL.parse(url);
+        var urlData = url.parse(connUrl);
         if (urlData.auth === null) {
             urlData.auth = connCfg.username + ':' + connCfg.password;
-            url = URL.format(urlData);
+            connUrl = url.format(urlData);
         }
     }
-    var conn = nano(url);
+    var conn = nano(connUrl);
     connections[connName] = conn;
 
     var dbs = _.keys(connCfg.databases) || [];
