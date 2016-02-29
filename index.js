@@ -7,7 +7,8 @@ module.exports = {
     init: init,
     get: get,
     getConnection: getConnection,
-    getConnections: getConnections
+    getConnections: getConnections,
+    getDatabase: get
 };
 
 var async = require('async');
@@ -37,7 +38,7 @@ function init(config, _logger_, callback) {
 
     var conns = _.keys(cfg.connections);
     debug('Initializing connections ' +  conns);
-    async.forEach(conns, initConnection, function (err, res) {
+    async.forEach(conns, _initConnection, function (err, res) {
         callback(err);
     });
 }
@@ -87,7 +88,7 @@ function get(name) {
     }
 }
 
-function initConnection(connName, callback) {
+function _initConnection(connName, callback) {
 
     var connCfg = cfg.connections[connName];
     var connUrl = connCfg.url;
@@ -105,34 +106,20 @@ function initConnection(connName, callback) {
 
     var dbs = _.keys(connCfg.databases) || [];
 
-    async.each(dbs, getVerifyDatabase(connName), function (err) {
+    async.each(dbs, _getVerifyDatabase(connName), function (err) {
         callback(err);
     });
 }
 
-function getVerifyDatabase(connName) {
+function _getVerifyDatabase(connName) {
     return function (dbName, callback) {
         debug('Verifying database ' + dbName + ' of connection ' + connName);
         var conn = connections[connName];
-
-        function setupConnection() {
-            //store the db object in appropriate places
-            var db = conn.use(dbName);
-            dbMap[connName + ':' + dbName] = db;
-            if (typeof dbByName[dbName] === 'undefined') {
-                dbByName[dbName] = {};
-            } else {
-                logger.warn('Multiple databases are using the name "%s"', dbName);
-            }
-
-            dbByName[dbName][connName] = db;
-        }
-
         var validateConnection = scopedConfig.get('validateConnection', connName, dbName, true);
 
         //if false, don't bother trying to connect to the db
         if (!validateConnection) {
-            setupConnection();
+            __setupConnection();
             return callback();
         }
 
@@ -147,7 +134,7 @@ function getVerifyDatabase(connName) {
                             return callback(new VError(err, 'Could not create DB %s of connection %s', dbName, connName));
                         } else {
                             logger.info('Created database %s of connection %s.', dbName, connName);
-                            setupConnection();
+                            __setupConnection();
                             return callback();
                         }
                     });
@@ -156,9 +143,23 @@ function getVerifyDatabase(connName) {
                 }
 
             } else {
-                setupConnection();
+                __setupConnection();
                 return callback();
             }
         });
+        
+        function __setupConnection() {
+            //store the db object in appropriate places
+            var db = conn.use(dbName);
+            dbMap[connName + ':' + dbName] = db;
+            if (typeof dbByName[dbName] === 'undefined') {
+                dbByName[dbName] = {};
+            } else {
+                logger.warn('Multiple databases are using the name "%s"', dbName);
+            }
+
+            dbByName[dbName][connName] = db;
+        }
+
     };
 }
