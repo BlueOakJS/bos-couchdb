@@ -8,17 +8,24 @@ module.exports = {
     get: get,
     getConnection: getConnection,
     getConnections: getConnections,
-    getDatabase: get
+    getDatabase: get,
+    getDatabaseNames: getDatabaseNames,
+    updateDesign: updateDesign,
+    updateDesigns: updateDesigns
 };
 
 var async = require('async');
 var nano = require('nano');
+var path = require('path');
+var requireDir = require('require-dir');
 var url = require('url');
 var VError = require('verror');
 var _ = require('lodash');
-var debug = require('debug')('couchdb');
+var debug = require('debug')('bos-couchdb');
 var scope = require('./lib/scope');
+var util = require('util');
 
+var designs = {}; //map representing the 'couchdb' directory in the BOS project
 var connections = {}; //map connection name to the db object
 var dbMap = {}; //map with key "<connName>:<dbName>" and value is the db object
 var dbByName = {}; //used to look up a database without a connection name.  Looks like
@@ -27,18 +34,24 @@ var dbByName = {}; //used to look up a database without a connection name.  Look
 //  <connName2>: <DB Object>
 // }
 
-var cfg, logger;
+var cfg, log;
 var scopedConfig;
 
-function init(config, _logger_, callback) {
+function init(config, logger, callback) {
 
-    logger = _logger_;
+    log = logger;
     cfg = config.get('couchdb');
     scopedConfig = scope(cfg);
 
+    try {
+        designs = requireDir(path.join(global.__appDir, 'couchdb'), { recurse: true });
+    } catch (err) {
+        log.error('Failed loading designs from "couchdb/": %s\nupdateDesigns will not be available.', err);
+    }
+
     var conns = _.keys(cfg.connections);
     debug('Initializing connections ' +  conns);
-    async.forEach(conns, _initConnection, function (err, res) {
+    async.forEach(conns, _initConnection, function (err) {
         callback(err);
     });
 }
@@ -60,6 +73,13 @@ function getConnection(connName) {
  */
 function getConnections() {
     return connections;
+}
+
+/**
+ * Get the names of all databases.
+ */
+function getDatabaseNames() {
+    return Object.keys(dbMap);
 }
 
 /*
@@ -133,7 +153,8 @@ function _getVerifyDatabase(connName) {
                         if (err) {
                             return callback(new VError(err, 'Could not create DB %s of connection %s', dbName, connName));
                         } else {
-                            logger.info('Created database %s of connection %s.', dbName, connName);
+                            log.info('Created database %s of connection %s.', dbName, connName);
+                            debug('Creation response for database %s:%s: %s', connName, dbName, JSON.stringify(body, null, 2));
                             __setupConnection();
                             return callback();
                         }
@@ -143,6 +164,7 @@ function _getVerifyDatabase(connName) {
                 }
 
             } else {
+                debug('Verification response for database %s:%s: %s', connName, dbName, JSON.stringify(body, null, 2));
                 __setupConnection();
                 return callback();
             }
@@ -155,11 +177,92 @@ function _getVerifyDatabase(connName) {
             if (typeof dbByName[dbName] === 'undefined') {
                 dbByName[dbName] = {};
             } else {
-                logger.warn('Multiple databases are using the name "%s"', dbName);
+                log.warn('Multiple databases are using the name "%s"', dbName);
             }
 
             dbByName[dbName][connName] = db;
         }
 
     };
+}
+
+function updateDesigns(designPaths, callback) {
+    var errors = [];
+    if (!Array.isArray(designPaths) && typeof designPaths === 'function') {
+        callback = designPaths;
+        designPaths = null;
+    }
+    if (!designPaths) {
+        designPaths = [];
+        Object.keys(dbMap).forEach(function (dbName) {
+            var parts = dbName.split(':');
+            parts.push('put design name here');
+            Object.keys(designs[parts[0]][parts[1]]).forEach(function (designName) {
+                parts[2] = designName;
+                designPaths.push(parts.join('.'));
+            });
+        });
+    }
+    if (!(Array.isArray(designPaths) && typeof callback === 'function')) {
+        var msg = 'Invalid parameters';
+        log.error(msg);
+        throw new VError(msg);
+    }
+    // everything looks good, we're ready to update any designs that need it
+    designPaths.forEach(function (designPath) {
+        var design = _.get(designs, designPath);
+        if (!design) {
+            log.warn('skipping unknown design ' + designPath);
+        } else {
+            var parts = designPath.split('.');
+            updateDesign(parts[0] + ':' + parts[1], parts[2], design, function (error, okMessage) {
+                if (error) {
+                    errors.push(error);
+                    log.error(error.message);
+                } else {
+                    log.info(okMessage);
+                }
+            });
+        }
+    });
+    return callback(errors.length ? errors : null);
+}
+
+function updateDesign(dbName, designName, designDoc, callback) {
+    var nanoDb = get(dbName);
+    if (!nanoDb) {
+        return callback(new VError('Unknown Database ("%s" is not configured)', dbName));
+    } else if (typeof designName !== 'string') {
+        return callback(new VError('A design name string must be provided to update a database\'s design'));
+    } else if (typeof designDoc !== 'object') {
+        return callback(new VError('A design document object must be provided to update a database\'s design'));
+    }
+    
+    debug('Doing update design for design document %s.%s (database.design)', dbName, designName);
+    nanoDb.get('_design/' + designName, function (err, doc) {
+        if (err) {
+            debug('Error getting existing design document (%s.%s), will try to create it.\n(error: %s)', dbName, designName, err);
+        } else if (doc) {
+            debug('Found original design document (%s.%s), revision: %s', dbName, designName, doc._rev);
+            designDoc._rev = doc._rev;
+            delete doc._id;
+            if (_.isEqual(designDoc, doc)) {
+                var msg = util.format('Design documents (%s.%s) are identical, no update to be made.', dbName, designName);
+                debug(msg);
+                return callback(null, msg);
+            }
+        }
+        nanoDb.insert(designDoc, '_design/' + designName, function (err, body) {
+            var msg;
+            if (err) {
+                msg = util.format('Error inserting the new design document (%s.%s): %s', dbName, designName, err);
+                debug(msg);
+                return callback(new VError.WError(err, msg));
+            } else {
+                msg = util.format('Design document (%s.%s) updated to revision %s.', dbName, designName, body.rev);
+                debug(msg);
+                return callback(null, msg);
+            }
+        });
+    });
 }

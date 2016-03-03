@@ -169,7 +169,7 @@ var profilesDb = bosCouchdb.get('cloudant:profiles');
 var devicesDb = bosCouchdb.get('local:devices');
 ```
 
-### updateDesigns([designs])
+### updateDesigns([designPaths], callback)
 
 The `updateDesigns` function takes an optional array of paths to design names, e.g.:
 ```js
@@ -180,3 +180,9 @@ which would cause only the designs at `couchdb/conn1/dba/designx.js` and `couchd
 By default, if the `designs` parameter is not included, all designs will be updated (if changed).
 
 The `updateDesigns` function will not change the design in the database if the local version `_.isEqual()` to the design installed on the CouchDB server.
+
+**N.B.**: the design docs are read once at startup
+
+### updateDesign(dbName, designName, designDoc, callback)
+
+The `updateDesign` function allows you to pass an arbitrary design document (`designDoc` - which should be an object that follows the CouchDB design document format) and have it applied to a given database design (`designName` in database `dbName` - which, like `get()`, is an optionally connection qualified database name).
