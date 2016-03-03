@@ -52,7 +52,7 @@ function init(config, logger, callback) {
     var conns = _.keys(cfg.connections);
     debug('Initializing connections ' +  conns);
     async.forEach(conns, _initConnection, function (err) {
-        callback(err);
+        return callback(err);
     });
 }
 
@@ -139,8 +139,7 @@ function _getVerifyDatabase(connName) {
 
         //if false, don't bother trying to connect to the db
         if (!validateConnection) {
-            __setupConnection();
-            return callback();
+            return __setupConnection();
         }
 
         //we want to validate the connection, so attempt to connect to it
@@ -155,8 +154,7 @@ function _getVerifyDatabase(connName) {
                         } else {
                             log.info('Created database %s of connection %s.', dbName, connName);
                             debug('Creation response for database %s:%s: %s', connName, dbName, JSON.stringify(body, null, 2));
-                            __setupConnection();
-                            return callback();
+                            return __setupConnection();
                         }
                     });
                 } else {
@@ -165,15 +163,15 @@ function _getVerifyDatabase(connName) {
 
             } else {
                 debug('Verification response for database %s:%s: %s', connName, dbName, JSON.stringify(body, null, 2));
-                __setupConnection();
-                return callback();
+                return __setupConnection();
             }
         });
         
         function __setupConnection() {
             //store the db object in appropriate places
             var db = conn.use(dbName);
-            dbMap[connName + ':' + dbName] = db;
+            var qualifiedDbName = connName + ':' + dbName;
+            dbMap[qualifiedDbName] = db;
             if (typeof dbByName[dbName] === 'undefined') {
                 dbByName[dbName] = {};
             } else {
@@ -181,6 +179,18 @@ function _getVerifyDatabase(connName) {
             }
 
             dbByName[dbName][connName] = db;
+            
+            if (scopedConfig.get('updateDesigns', connName, dbName, false)) {
+                var dbDesigns = _.get(designs, qualifiedDbName.replace(':', '.'));
+                if (dbDesigns) {
+                    return async.forEachOf(dbDesigns, function (designDoc, designName, callback) {
+                        return updateDesign(qualifiedDbName, designName, designDoc, callback);
+                    }, callback);
+                } else {
+                    log.warn('No designs found to update database %s as requested by "updateDesigns" option.', qualifiedDbName);
+                }
+            }
+            return callback();
         }
 
     };
@@ -195,11 +205,9 @@ function updateDesigns(designPaths, callback) {
     if (!designPaths) {
         designPaths = [];
         Object.keys(dbMap).forEach(function (dbName) {
-            var parts = dbName.split(':');
-            parts.push('put design name here');
-            Object.keys(designs[parts[0]][parts[1]]).forEach(function (designName) {
-                parts[2] = designName;
-                designPaths.push(parts.join('.'));
+            var dbPath = dbName.replace(':', '.');
+            _.get(designs, dbPath).forEach(function (designName) {
+                designPaths.push(dbPath + '.' + designName);
             });
         });
     }
