@@ -20,6 +20,9 @@ nock(/.example\.com/)
     .reply(404)
     .put('/bar') //when we attempt to create the db
     .reply(201);
+nock(/.fake\.com/)
+    .get('/users')
+    .reply(200, {});
 
 describe('CouchDB Init Test', function () {
 
@@ -200,7 +203,7 @@ describe('CouchDB Init Test', function () {
                         }
                     },
                     test2: {
-                        url: 'http://couchdb2.example.com',
+                        url: 'http://couchdb.fake.com',
                         databases: {
                             users: {} //returns 200 by nock
                         }
@@ -235,7 +238,7 @@ describe('CouchDB Init Test', function () {
                         }
                     },
                     test2: {
-                        url: 'http://couchdb2.example.com',
+                        url: 'http://couchdb.fake.com',
                         databases: {
                             users: {} //returns 200 by nock
                         }

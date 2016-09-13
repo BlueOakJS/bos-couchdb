@@ -234,14 +234,14 @@ function updateDesigns(designPaths, callback) {
                     log.info(okMessage);
                     okMessages.push(okMessage);
                 }
-                if (i === designPaths.length){
+                if (i === designPaths.length) {
                     return callback(errors.length ? errors : null, okMessages.length ? okMessages : null);
                 }
             });
         }
     });
-    if (i === designPaths.length){
-        return callback(null, "no design paths match a design found in couchdb directory");
+    if (i === designPaths.length) {
+        return callback(null, 'no design paths match a design found in couchdb directory');
     }
 }
 
