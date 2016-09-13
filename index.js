@@ -141,7 +141,6 @@ function _getVerifyDatabase(connName) {
         if (!validateConnection) {
             return __setupConnection();
         }
-
         //we want to validate the connection, so attempt to connect to it
         conn.db.get(dbName, function (err, body) {
             if (err) {
@@ -198,6 +197,7 @@ function _getVerifyDatabase(connName) {
 
 function updateDesigns(designPaths, callback) {
     var errors = [];
+    var okMessages = [];
     if (!Array.isArray(designPaths) && typeof designPaths === 'function') {
         callback = designPaths;
         designPaths = null;
@@ -206,7 +206,7 @@ function updateDesigns(designPaths, callback) {
         designPaths = [];
         Object.keys(dbMap).forEach(function (dbName) {
             var dbPath = dbName.replace(':', '.');
-            _.get(designs, dbPath).forEach(function (designName) {
+            Object.keys(_.get(designs, dbPath)).forEach(function (designName) {
                 designPaths.push(dbPath + '.' + designName);
             });
         });
@@ -217,23 +217,32 @@ function updateDesigns(designPaths, callback) {
         throw new VError(msg);
     }
     // everything looks good, we're ready to update any designs that need it
+    var i = 0;
     designPaths.forEach(function (designPath) {
         var design = _.get(designs, designPath);
         if (!design) {
             log.warn('skipping unknown design ' + designPath);
+            i++;
         } else {
             var parts = designPath.split('.');
             updateDesign(parts[0] + ':' + parts[1], parts[2], design, function (error, okMessage) {
+                i++;
                 if (error) {
                     errors.push(error);
                     log.error(error.message);
                 } else {
                     log.info(okMessage);
+                    okMessages.push(okMessage);
+                }
+                if (i === designPaths.length){
+                    return callback(errors.length ? errors : null, okMessages.length ? okMessages : null);
                 }
             });
         }
     });
-    return callback(errors.length ? errors : null);
+    if (i === designPaths.length){
+        return callback(null, "no design paths match a design found in couchdb directory");
+    }
 }
 
 function updateDesign(dbName, designName, designDoc, callback) {

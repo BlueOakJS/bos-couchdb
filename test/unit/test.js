@@ -189,7 +189,7 @@ describe('CouchDB Init Test', function () {
         });
     });
 
-    it('Looking up an ambiuously defined database should result in an error', function (done) {
+    it('Looking up an ambiguously defined database should result in an error', function (done) {
         var cfg = {
             couchdb: {
                 connections: {
@@ -224,7 +224,7 @@ describe('CouchDB Init Test', function () {
         });
     });
 
-    it('Ambiuously defined database can be looked up using connection name', function (done) {
+    it('Ambiguously defined database can be looked up using connection name', function (done) {
         var cfg = {
             couchdb: {
                 connections: {
