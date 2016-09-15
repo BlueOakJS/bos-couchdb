@@ -196,8 +196,6 @@ function _getVerifyDatabase(connName) {
 }
 
 function updateDesigns(designPaths, callback) {
-    var errors = [];
-    var okMessages = [];
     if (!Array.isArray(designPaths) && typeof designPaths === 'function') {
         callback = designPaths;
         designPaths = null;
@@ -217,32 +215,22 @@ function updateDesigns(designPaths, callback) {
         throw new VError(msg);
     }
     // everything looks good, we're ready to update any designs that need it
-    var i = 0;
+    var updateDesignFns = [];
     designPaths.forEach(function (designPath) {
         var design = _.get(designs, designPath);
+        var parts = designPath.split('.');
         if (!design) {
             log.warn('skipping unknown design ' + designPath);
-            i++;
         } else {
-            var parts = designPath.split('.');
-            updateDesign(parts[0] + ':' + parts[1], parts[2], design, function (error, okMessage) {
-                i++;
-                if (error) {
-                    errors.push(error);
-                    log.error(error.message);
-                } else {
-                    log.info(okMessage);
-                    okMessages.push(okMessage);
-                }
-                if (i === designPaths.length) {
-                    return callback(errors.length ? errors : null, okMessages.length ? okMessages : null);
-                }
-            });
+            updateDesignFns.push(updateDesign.bind(this, parts[0] + ':' + parts[1], parts[2], design));
         }
     });
-    if (i === designPaths.length) {
-        return callback(null, 'no design paths match a design found in couchdb directory');
+    if (updateDesignFns.length === 0) {
+        callback(null, 'no design paths match a design found in couchdb directory');
     }
+    async.parallel(updateDesignFns, function (error, okMessages) {
+        callback(error ? error : null, okMessages.length ? okMessages : null);
+    });
 }
 
 function updateDesign(dbName, designName, designDoc, callback) {

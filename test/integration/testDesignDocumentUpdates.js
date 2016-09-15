@@ -38,13 +38,12 @@ describe('CouchDB Integration Test', function () {
             if (err) {
                 return done(err);
             }
-            var updateDesigns = couchdb.updateDesigns.bind({}, ['test.basic.example'],
-                function (err, msgs) {
-                    assert.ok(err === null, 'error' + err);
-                    assert.equal(msgs.length, 1);
-                    assert.ok(msgs[0].match(/updated to revision/));
-                    done();
-                });
+            var updateDesigns = couchdb.updateDesigns.bind({}, ['test.basic.example'], function (err, msgs) {
+                assert.ok(err === null, 'error' + err);
+                assert.equal(msgs.length, 1);
+                assert.ok(msgs[0].match(/updated to revision/));
+                done();
+            });
             updateDesigns();
         });
     });
@@ -66,13 +65,12 @@ describe('CouchDB Integration Test', function () {
             if (err) {
                 return done(err);
             }
-            var updateDesigns = couchdb.updateDesigns.bind({}, null,
-                function (err, msgs) {
-                    assert.ok(err === null, 'error attempting to update design doc:' + err);
-                    assert.equal(msgs.length, 1);
-                    assert.ok(msgs[0].match(/are identical/));
-                    done();
-                });
+            var updateDesigns = couchdb.updateDesigns.bind({}, null, function (err, msgs) {
+                assert.ok(err === null, 'error attempting to update design doc:' + err);
+                assert.equal(msgs.length, 1);
+                assert.ok(msgs[0].match(/are identical/));
+                done();
+            });
             updateDesigns();
         });
     });
