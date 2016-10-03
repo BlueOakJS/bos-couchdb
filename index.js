@@ -252,18 +252,14 @@ function updateDesigns(designPaths) {
 
 function updateDesign(dbName, designName, designDoc) {
     var nanoDb = get(dbName);
-    var deferred = Q.defer();
     if (!nanoDb) {
-        deferred.reject(new VError('Unknown Database ("%s" is not configured)', dbName));
-        return deferred.promise;
+        return Q.reject(new VError('Unknown Database ("%s" is not configured)', dbName));
     } else if (typeof designName !== 'string') {
-        deferred.reject(new VError('A design name string must be provided to update a database\'s design'));
-        return deferred.promise;
+        return Q.reject(new VError('A design name string must be provided to update a database\'s design'));
     } else if (typeof designDoc !== 'object') {
-        deferred.reject(new VError('A design document object must be provided to update a database\'s design'));
-        return deferred.promise;
+        return Q.reject(new VError('A design document object must be provided to update a database\'s design'));
     }
-    
+    var deferred = Q.defer();
     debug('Doing update design for design document %s.%s (database.design)', dbName, designName);
     nanoDb.get('_design/' + designName, function (err, doc) {
         if (err) {
