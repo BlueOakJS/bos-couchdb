@@ -26,10 +26,10 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "async": "^1.5.2",
     "debug": "^2.2.0",
     "lodash": "^4.5.0",
     "nano": "^6.2.0",
+    "q": "^1.4.1",
     "require-dir": "^0.3.0",
     "verror": "^1.6.1"
   },

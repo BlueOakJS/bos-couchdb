@@ -14,7 +14,6 @@ module.exports = {
     updateDesigns: updateDesigns
 };
 
-var async = require('async');
 var nano = require('nano');
 var path = require('path');
 var requireDir = require('require-dir');
@@ -24,6 +23,7 @@ var _ = require('lodash');
 var debug = require('debug')('bos-couchdb');
 var scope = require('./lib/scope');
 var util = require('util');
+var Q = require('q');
 
 var designs = {}; //map representing the 'couchdb' directory in the BOS project
 var connections = {}; //map connection name to the db object
@@ -51,17 +51,23 @@ function init(config, logger, callback) {
 
     var conns = _.keys(cfg.connections);
     debug('Initializing connections ' +  conns);
-    async.forEach(conns, _initConnection, function (err) {
-        return callback(err);
+    var initConnPromises = [];
+    conns.forEach(function (conn) {
+        initConnPromises.push(_initConnection(conn));
+    });
+    Q.all(initConnPromises).then(function () {
+        callback();
+    }, function (error) {
+        callback(error);
     });
 }
 
 //return the db connection (nano) object directly
 /**
  * Get a connection.
- * 
+ *
  * @param  {string} connName - The name of the connection to retrieve.
- * 
+ *
  * @return {Object} The `nano` connection object.
  */
 function getConnection(connName) {
@@ -84,11 +90,11 @@ function getDatabaseNames() {
 
 /*
  * Get a database.
- * 
+ *
  * @param  {string} name - The name can either be of the form "<connName>:<dbName>",
  *  e.g. "myCloudantDb:users", or it can simply be the db name, e.g. "users".
  *  In the case that there are two connections
- * 
+ *
  * @return {Object} The `nano` database object.
  */
 function get(name) {
@@ -125,23 +131,29 @@ function _initConnection(connName, callback) {
     connections[connName] = conn;
 
     var dbs = _.keys(connCfg.databases) || [];
-
-    async.each(dbs, _getVerifyDatabase(connName), function (err) {
-        callback(err);
+    var verifyDbPromises = [];
+    dbs.forEach(function (db) {
+        verifyDbPromises.push(_getVerifyDatabase(connName)(db));
     });
+    return Q.all(verifyDbPromises);
 }
 
 function _getVerifyDatabase(connName) {
-    return function (dbName, callback) {
+    return function (dbName) {
+        var deferred = Q.defer();
         debug('Verifying database ' + dbName + ' of connection ' + connName);
         var conn = connections[connName];
         var validateConnection = scopedConfig.get('validateConnection', connName, dbName, true);
 
         //if false, don't bother trying to connect to the db
         if (!validateConnection) {
-            return __setupConnection();
+            __setupConnection().then(function () {
+                deferred.resolve();
+            }, function (err) {
+                deferred.reject(err);
+            });
+            return deferred.promise;
         }
-
         //we want to validate the connection, so attempt to connect to it
         conn.db.get(dbName, function (err, body) {
             if (err) {
@@ -150,23 +162,32 @@ function _getVerifyDatabase(connName) {
                 if (createOnInit) {
                     conn.db.create(dbName, function (err, body) {
                         if (err) {
-                            return callback(new VError(err, 'Could not create DB %s of connection %s', dbName, connName));
+                            deferred.reject(new VError(err, 'Could not create DB %s of connection %s', dbName, connName));
                         } else {
                             log.info('Created database %s of connection %s.', dbName, connName);
                             debug('Creation response for database %s:%s: %s', connName, dbName, JSON.stringify(body, null, 2));
-                            return __setupConnection();
+                            __setupConnection().then(function () {
+                                deferred.resolve();
+                            }, function (err) {
+                                deferred.reject(err);
+                            });
                         }
                     });
                 } else {
-                    return callback(new VError(err, 'Could not connect to DB %s of connection %s', dbName, connName));
+                    deferred.reject(new VError(err, 'Could not connect to DB %s of connection %s', dbName, connName));
                 }
 
             } else {
                 debug('Verification response for database %s:%s: %s', connName, dbName, JSON.stringify(body, null, 2));
-                return __setupConnection();
+                __setupConnection().then(function () {
+                    deferred.resolve();
+                }, function (err) {
+                    deferred.reject(err);
+                });
             }
         });
-        
+        return deferred.promise;
+
         function __setupConnection() {
             //store the db object in appropriate places
             var db = conn.use(dbName);
@@ -179,73 +200,66 @@ function _getVerifyDatabase(connName) {
             }
 
             dbByName[dbName][connName] = db;
-            
+
             if (scopedConfig.get('updateDesigns', connName, dbName, false)) {
                 var dbDesigns = _.get(designs, qualifiedDbName.replace(':', '.'));
                 if (dbDesigns) {
-                    return async.forEachOf(dbDesigns, function (designDoc, designName, callback) {
-                        return updateDesign(qualifiedDbName, designName, designDoc, callback);
-                    }, callback);
+                    var updateDesignPromises = [];
+                    Object.keys(dbDesigns).forEach(function (designName) {
+                        updateDesignPromises.push(updateDesign(qualifiedDbName, designName, dbDesigns[designName]));
+                    });
+                    return Q.all(updateDesignPromises);
                 } else {
                     log.warn('No designs found to update database %s as requested by "updateDesigns" option.', qualifiedDbName);
                 }
             }
-            return callback();
+            return Q();
         }
-
     };
 }
 
-function updateDesigns(designPaths, callback) {
-    var errors = [];
-    if (!Array.isArray(designPaths) && typeof designPaths === 'function') {
-        callback = designPaths;
-        designPaths = null;
-    }
+function updateDesigns(designPaths) {
     if (!designPaths) {
         designPaths = [];
         Object.keys(dbMap).forEach(function (dbName) {
             var dbPath = dbName.replace(':', '.');
-            _.get(designs, dbPath).forEach(function (designName) {
+            Object.keys(_.get(designs, dbPath)).forEach(function (designName) {
                 designPaths.push(dbPath + '.' + designName);
             });
         });
     }
-    if (!(Array.isArray(designPaths) && typeof callback === 'function')) {
+    if (!(Array.isArray(designPaths))) {
         var msg = 'Invalid parameters';
         log.error(msg);
         throw new VError(msg);
     }
     // everything looks good, we're ready to update any designs that need it
+    var updateDesignPromises = [];
     designPaths.forEach(function (designPath) {
         var design = _.get(designs, designPath);
+        var parts = designPath.split('.');
         if (!design) {
             log.warn('skipping unknown design ' + designPath);
         } else {
-            var parts = designPath.split('.');
-            updateDesign(parts[0] + ':' + parts[1], parts[2], design, function (error, okMessage) {
-                if (error) {
-                    errors.push(error);
-                    log.error(error.message);
-                } else {
-                    log.info(okMessage);
-                }
-            });
+            updateDesignPromises.push(updateDesign(parts[0] + ':' + parts[1], parts[2], design));
         }
     });
-    return callback(errors.length ? errors : null);
+    if (updateDesignPromises.length === 0) {
+        return Q('no design paths match a design found in couchdb directory');
+    }
+    return Q.allSettled(updateDesignPromises);
 }
 
-function updateDesign(dbName, designName, designDoc, callback) {
+function updateDesign(dbName, designName, designDoc) {
     var nanoDb = get(dbName);
     if (!nanoDb) {
-        return callback(new VError('Unknown Database ("%s" is not configured)', dbName));
+        return Q.reject(new VError('Unknown Database ("%s" is not configured)', dbName));
     } else if (typeof designName !== 'string') {
-        return callback(new VError('A design name string must be provided to update a database\'s design'));
+        return Q.reject(new VError('A design name string must be provided to update a database\'s design'));
     } else if (typeof designDoc !== 'object') {
-        return callback(new VError('A design document object must be provided to update a database\'s design'));
+        return Q.reject(new VError('A design document object must be provided to update a database\'s design'));
     }
-    
+    var deferred = Q.defer();
     debug('Doing update design for design document %s.%s (database.design)', dbName, designName);
     nanoDb.get('_design/' + designName, function (err, doc) {
         if (err) {
@@ -257,7 +271,7 @@ function updateDesign(dbName, designName, designDoc, callback) {
             if (_.isEqual(designDoc, doc)) {
                 var msg = util.format('Design documents (%s.%s) are identical, no update to be made.', dbName, designName);
                 debug(msg);
-                return callback(null, msg);
+                deferred.resolve(msg);
             }
         }
         nanoDb.insert(designDoc, '_design/' + designName, function (err, body) {
@@ -265,12 +279,13 @@ function updateDesign(dbName, designName, designDoc, callback) {
             if (err) {
                 msg = util.format('Error inserting the new design document (%s.%s): %s', dbName, designName, err);
                 debug(msg);
-                return callback(new VError.WError(err, msg));
+                deferred.reject(new VError.WError(err, msg));
             } else {
                 msg = util.format('Design document (%s.%s) updated to revision %s.', dbName, designName, body.rev);
                 debug(msg);
-                return callback(null, msg);
+                deferred.resolve(msg);
             }
         });
     });
+    return deferred.promise;
 }
