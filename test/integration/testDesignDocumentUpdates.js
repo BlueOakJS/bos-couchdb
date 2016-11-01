@@ -1,24 +1,38 @@
 var assert = require('assert');
 var server = require('blueoak-server');
 var fs = require('fs');
+var path = require('path');
 var testUtil = server.testUtility();
-global.__appDir = __dirname;
+
+var couchdbModulePath = path.resolve(__dirname, '../..'),
+    bosCouchdbTestExampleConfig = path.resolve(__dirname, 'couchdb/test/bos-couchdb-test/example.json');
 
 /**
- * You MUST have couchdb running locally with a database called 'basic' in order for these tests to work
+ * You MUST have couchdb running locally with a database called 'bos-couchdb-test' in order for these tests to work
  */
 describe('CouchDB Integration Test', function () {
+    
+    var couchdb;
+    
+    before(function () {
+        global.__appDir = __dirname;
+    });
 
     beforeEach(function () {
-        couchdb = require('../../');
+        couchdb = require(couchdbModulePath);
     });
 
     afterEach(function () {
         //clean up couchdb
-        var name = require.resolve('../../');
+        var name = require.resolve(couchdbModulePath);
         delete require.cache[name];
-        name = require.resolve('./couchdb/test/basic/example');
+        name = require.resolve(bosCouchdbTestExampleConfig);
         delete require.cache[name];
+    });
+    
+    after(function () {
+        // restore the test data to its default value
+        _writeTestExample(1);
     });
 
     it('should update design document', function (done) {
@@ -28,19 +42,18 @@ describe('CouchDB Integration Test', function () {
                     test: {
                         url: 'http://127.0.0.1:5984',
                         databases: {
-                            basic: {}
+                            'bos-couchdb-test': {}
                         }
                     }
                 }
             }
         };
-        var randomId = Math.random();
-        fs.writeFileSync('./couchdb/test/basic/example.json', '{"views" : {}, "generatedId": "' + randomId + '"}');
+        _writeTestExample(Math.random());
         testUtil.initService(couchdb, cfg, function (err) {
             if (err) {
                 return done(err);
             }
-            couchdb.updateDesigns(['test.basic.example']).then(function (results) {
+            couchdb.updateDesigns(['test.bos-couchdb-test.example']).then(function (results) {
                 try {
                     assert.equal(results.length, 1);
                     assert.ok(results[0].reason === undefined, 'promise rejected with reason: ' + results[0].reason);
@@ -62,7 +75,7 @@ describe('CouchDB Integration Test', function () {
                     test: {
                         url: 'http://127.0.0.1:5984',
                         databases: {
-                            basic: {} //returns 200 by nock
+                            'bos-couchdb-test': {}
                         }
                     }
                 }
@@ -94,19 +107,18 @@ describe('CouchDB Integration Test', function () {
                     test: {
                         url: 'http://127.0.0.1:5984',
                         databases: {
-                            basic: {}
+                            'bos-couchdb-test': {}
                         }
                     }
                 }
             }
         };
-        var randomId = Math.random();
-        fs.writeFileSync('./couchdb/test/basic/example.json', '{"views" : {}, "generatedId": "' + randomId + '"}');
+        _writeTestExample(Math.random());
         testUtil.initService(couchdb, cfg, function (err) {
             if (err) {
                 return done(err);
             }
-            couchdb.updateDesigns(['test.basic.example', 'test.non-existent-db.example']).then(function (results) {
+            couchdb.updateDesigns(['test.bos-couchdb-test.example', 'test.non-existent-db.example']).then(function (results) {
                 try {
                     assert.equal(results.length, 2);
                     assert.ok(results[0].value.match(/updated to revision/), 'did not get expected message "updated to revision", actual message: ' + results[0].value);
@@ -128,15 +140,14 @@ describe('CouchDB Integration Test', function () {
                     test: {
                         url: 'http://127.0.0.1:5984',
                         databases: {
-                            basic: {updateDesigns: true},
+                            'bos-couchdb-test': {updateDesigns: true},
                             'non-existent-db': {validateConnection: false}
                         }
                     }
                 }
             }
         };
-        var randomId = Math.random();
-        fs.writeFileSync('./couchdb/test/basic/example.json', '{"views" : {}, "generatedId": "' + randomId + '"}');
+        _writeTestExample(Math.random());
         testUtil.initService(couchdb, cfg, function (err) {
             if (err) {
                 return done(err);
@@ -145,3 +156,7 @@ describe('CouchDB Integration Test', function () {
         });
     });
 });
+
+function _writeTestExample(id) {
+    fs.writeFileSync(bosCouchdbTestExampleConfig, '{"views" : {}, "generatedId": "' + id + '"}');
+}
