@@ -55,11 +55,7 @@ function init(config, logger, callback) {
     conns.forEach(function (conn) {
         initConnPromises.push(_initConnection(conn));
     });
-    Q.all(initConnPromises).then(function () {
-        callback();
-    }, function (error) {
-        callback(error);
-    });
+    Q.all(initConnPromises).nodeify(callback);
 }
 
 //return the db connection (nano) object directly
@@ -135,58 +131,45 @@ function _initConnection(connName, callback) {
     dbs.forEach(function (db) {
         verifyDbPromises.push(_getVerifyDatabase(connName)(db));
     });
-    return Q.all(verifyDbPromises);
+    return Q.all(verifyDbPromises).nodeify(callback);
 }
 
 function _getVerifyDatabase(connName) {
     return function (dbName) {
-        var deferred = Q.defer();
         debug('Verifying database ' + dbName + ' of connection ' + connName);
         var conn = connections[connName];
         var validateConnection = scopedConfig.get('validateConnection', connName, dbName, true);
 
         //if false, don't bother trying to connect to the db
         if (!validateConnection) {
-            __setupConnection().then(function () {
-                deferred.resolve();
-            }, function (err) {
-                deferred.reject(err);
-            });
-            return deferred.promise;
+            return __setupConnection();
         }
         //we want to validate the connection, so attempt to connect to it
+        var deferred = Q.defer();
         conn.db.get(dbName, function (err, body) {
-            if (err) {
-                //If the DB doesn't exist, we can attempt to create it assuming createOnConnect is specified
-                var createOnInit = scopedConfig.get('createDatabase', connName, dbName, false);
-                if (createOnInit) {
-                    conn.db.create(dbName, function (err, body) {
-                        if (err) {
-                            deferred.reject(new VError(err, 'Could not create DB %s of connection %s', dbName, connName));
-                        } else {
-                            log.info('Created database %s of connection %s.', dbName, connName);
-                            debug('Creation response for database %s:%s: %s', connName, dbName, JSON.stringify(body, null, 2));
-                            __setupConnection().then(function () {
-                                deferred.resolve();
-                            }, function (err) {
-                                deferred.reject(err);
-                            });
-                        }
-                    });
-                } else {
-                    deferred.reject(new VError(err, 'Could not connect to DB %s of connection %s', dbName, connName));
-                }
-
-            } else {
+            if (!err) {
                 debug('Verification response for database %s:%s: %s', connName, dbName, JSON.stringify(body, null, 2));
-                __setupConnection().then(function () {
-                    deferred.resolve();
-                }, function (err) {
-                    deferred.reject(err);
-                });
+                deferred.resolve(__setupConnection());
             }
+            //If the DB doesn't exist, we can attempt to create it assuming createOnConnect is specified
+            var createOnInit = scopedConfig.get('createDatabase', connName, dbName, false);
+            if (createOnInit) {
+                var createPromise = Q.npost(conn.db, 'create', [dbName])
+                .then(function (body) {
+                    log.info('Created database %s of connection %s.', dbName, connName);
+                    debug('Creation response for database %s:%s: %s', connName, dbName, JSON.stringify(body, null, 2));
+                    return __setupConnection();                   
+                })
+                .catch(function (err) {
+                    throw new VError(err, 'Could not create DB %s on connection %s', dbName, connName);
+                });
+                deferred.resolve(createPromise);
+            } else {
+                deferred.reject(new VError(err, 'Could not connect to DB %s on connection %s', dbName, connName));
+            }         
         });
         return deferred.promise;
+
 
         function __setupConnection() {
             //store the db object in appropriate places
