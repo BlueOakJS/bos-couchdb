@@ -11,7 +11,9 @@
     "test": "mocha --check-leaks test/unit; npm run lint",
     "test-integration": "mocha --check-leaks test/integration",
     "lint": "eslint index.js lib test && echo lint complete.",
-    "postinstall": "typings install || echo For development time Definitely Typed support: 'npm install -g typings && typings install'"
+    "postinstall": "typings install || echo For development time Definitely Typed support: 'npm install -g typings && typings install'",
+    "preversion": "npm test && npm run test-integration",
+    "prepublish": "npm run preversion"
   },
   "author": "Patrick Wolf <patrick.wolf@pointsource.com>",
   "contributors": [
