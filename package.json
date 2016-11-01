@@ -12,8 +12,7 @@
     "test-integration": "mocha --check-leaks test/integration",
     "lint": "eslint index.js lib test && echo lint complete.",
     "postinstall": "typings install || echo For development time Definitely Typed support: 'npm install -g typings && typings install'",
-    "preversion": "npm test && npm run test-integration",
-    "prepublish": "npm run preversion"
+    "preversion": "npm test && npm run test-integration"
   },
   "author": "PointSource LLC <github@pointsource.com>",
   "contributors": [
