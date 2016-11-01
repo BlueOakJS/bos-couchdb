@@ -20,16 +20,22 @@ nock(/.example\.com/)
     .reply(404)
     .put('/bar') //when we attempt to create the db
     .reply(201);
+nock(/.fake\.com/)
+    .get('/users')
+    .reply(200, {});
+
+var path = require('path');
+var couchdbModulePath = path.resolve(__dirname, '../..');
 
 describe('CouchDB Init Test', function () {
 
     beforeEach(function() {
-        couchdb = require('../../');
+        couchdb = require(couchdbModulePath);
     });
 
     afterEach(function() {
         //clean up couchdb
-        var name = require.resolve('../../');
+        var name = require.resolve(couchdbModulePath);
         delete require.cache[name];
     });
 
@@ -189,9 +195,10 @@ describe('CouchDB Init Test', function () {
         });
     });
 
-    it('Looking up an ambiuously defined database should result in an error', function (done) {
+    it('Looking up an ambiguously defined database should result in an error', function (done) {
         var cfg = {
             couchdb: {
+                validateConnection: false,
                 connections: {
                     test: {
                         url: 'http://couchdb.example.com',
@@ -200,7 +207,7 @@ describe('CouchDB Init Test', function () {
                         }
                     },
                     test2: {
-                        url: 'http://couchdb2.example.com',
+                        url: 'http://couchdb.fake.com',
                         databases: {
                             users: {} //returns 200 by nock
                         }
@@ -224,9 +231,10 @@ describe('CouchDB Init Test', function () {
         });
     });
 
-    it('Ambiuously defined database can be looked up using connection name', function (done) {
+    it('Ambiguously defined database can be looked up using connection name', function (done) {
         var cfg = {
             couchdb: {
+                validateConnection: false,
                 connections: {
                     test: {
                         url: 'http://couchdb.example.com',
@@ -235,7 +243,7 @@ describe('CouchDB Init Test', function () {
                         }
                     },
                     test2: {
-                        url: 'http://couchdb2.example.com',
+                        url: 'http://couchdb.fake.com',
                         databases: {
                             users: {} //returns 200 by nock
                         }
