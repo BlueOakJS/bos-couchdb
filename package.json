@@ -15,9 +15,11 @@
     "preversion": "npm test && npm run test-integration",
     "prepublish": "npm run preversion"
   },
-  "author": "Patrick Wolf <patrick.wolf@pointsource.com>",
+  "author": "PointSource LLC <github@pointsource.com>",
   "contributors": [
-    "Sean Kennedy <sean.kennedy@pointsource.com>"
+    "Sean Kennedy <sean.kennedy@pointsource.com>",
+    "Ryan Sheppard <ryan.sheppard@pointsource.com",
+    "Patrick Wolf <patrick.wolf@pointsource.com>"
   ],
   "keywords": [
     "node",
