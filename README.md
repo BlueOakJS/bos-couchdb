@@ -99,8 +99,6 @@ The design documents to be used to update the views, either on startup with the 
 2. that contains an object named for of every view to be managed/updated
 3. which has `toString()`'d functions named `map` and `reduce`
 
-<<<<<<< HEAD
-=======
 e.g., `couchdb/conn1/dba/designx.js`:
 ```js
 module.exports = {
@@ -126,11 +124,11 @@ module.exports = {
 };
 ```
 
-(Probably other fields from the [CouchDB design doc format](http://guide.couchdb.org/draft/design.html) can be include in the export - if you do so and confirm it works, please submit a pull request to update the docs (and tests - pretty please).)
+(Probably other fields from the [CouchDB design doc format](http://guide.couchdb.org/draft/design.html) can be include in the export -
+if you do so and confirm it works, please submit a pull request to update the docs (and tests - pretty please).)
 
 ## Usage
 
->>>>>>> feature/designs-updater
 The bos-couchdb service can be injected into services or handlers through a `bosCouchdb` parameter on the init method.
 
 ```js
